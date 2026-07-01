@@ -1,0 +1,1215 @@
+import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { Heart, Music, Volume2, VolumeX, Sparkles, Send, Star, Compass, ArrowRight, Check } from "lucide-react";
+
+// Paths to our gorgeous generated images
+const tomJerrySorry = "/src/assets/images/tom_jerry_sorry_1782887362820.jpg";
+const tomJerryHug = "/src/assets/images/tom_jerry_hug_1782887381107.jpg";
+const tomJerrySweet = "/src/assets/images/tom_jerry_sweet_1782887405269.jpg";
+const tomJerryForever = "/src/assets/images/tom_jerry_forever_1782887423624.jpg";
+
+// Custom Web Audio API Emotional Music Synthesizer
+class ApologySynth {
+  private ctx: AudioContext | null = null;
+  private pianoGain: GainNode | null = null;
+  private violinGain: GainNode | null = null;
+  private masterGain: GainNode | null = null;
+  private timerId: any = null;
+  private chordIndex = 0;
+  private isPlaying = false;
+
+  private chords = [
+    [220, 261.63, 329.63, 440], // Am (A3, C4, E4, A4)
+    [174.61, 220, 261.63, 349.23], // F (F3, A3, C4, F4)
+    [261.63, 329.63, 392, 523.25], // C (C3, E3, G3, C4)
+    [196, 246.94, 293.66, 392] // G (G3, B3, D4, G4)
+  ];
+  private violinMelody = [440, 493.88, 523.25, 587.33, 659.25, 587.33, 523.25, 493.88]; // A4, B4, C5, D5, E5...
+
+  public start() {
+    if (this.isPlaying) return;
+    try {
+      this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      this.masterGain = this.ctx.createGain();
+      this.masterGain.gain.setValueAtTime(0.35, this.ctx.currentTime);
+      this.masterGain.connect(this.ctx.destination);
+
+      this.pianoGain = this.ctx.createGain();
+      this.pianoGain.gain.setValueAtTime(0.5, this.ctx.currentTime);
+      this.pianoGain.connect(this.masterGain);
+
+      this.violinGain = this.ctx.createGain();
+      this.violinGain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+      this.violinGain.connect(this.masterGain);
+
+      this.isPlaying = true;
+      this.chordIndex = 0;
+      this.scheduler();
+    } catch (e) {
+      console.error("Audio Context failed to start:", e);
+    }
+  }
+
+  private scheduler() {
+    if (!this.isPlaying || !this.ctx) return;
+
+    const playStep = () => {
+      this.playPianoChord(this.chords[this.chordIndex % this.chords.length]);
+      if (this.chordIndex % 2 === 0) {
+        this.playViolinNote(this.violinMelody[Math.floor(this.chordIndex / 2) % this.violinMelody.length]);
+      }
+      this.chordIndex++;
+      this.timerId = setTimeout(playStep, 4000);
+    };
+
+    playStep();
+  }
+
+  private playPianoChord(frequencies: number[]) {
+    if (!this.ctx || !this.pianoGain) return;
+    const now = this.ctx.currentTime;
+
+    frequencies.forEach((freq, idx) => {
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+      const filter = this.ctx!.createBiquadFilter();
+
+      // Arpeggiate chord notes slightly for emotional, delicate piano feel
+      const noteDelay = idx * 0.08;
+
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(freq, now + noteDelay);
+
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(800, now);
+
+      gain.gain.setValueAtTime(0, now + noteDelay);
+      gain.gain.linearRampToValueAtTime(0.12, now + noteDelay + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + noteDelay + 3.5);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.pianoGain!);
+
+      osc.start(now + noteDelay);
+      osc.stop(now + noteDelay + 3.6);
+    });
+  }
+
+  private playViolinNote(frequency: number) {
+    if (!this.ctx || !this.violinGain) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const vibrato = this.ctx.createOscillator();
+    const vibratoGain = this.ctx.createGain();
+    const gain = this.ctx.createGain();
+    const filter = this.ctx.createBiquadFilter();
+
+    osc.type = "sine";
+    // Soaring strings play higher registers
+    osc.frequency.setValueAtTime(frequency * 1.5, now);
+
+    vibrato.frequency.value = 4.8; 
+    vibratoGain.gain.value = 6; 
+
+    vibrato.connect(vibratoGain);
+    vibratoGain.connect(osc.frequency);
+
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(600, now);
+    filter.frequency.linearRampToValueAtTime(1200, now + 3);
+
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.06, now + 1.2);
+    gain.gain.setValueAtTime(0.06, now + 5.0);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 7.5);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.violinGain);
+
+    vibrato.start(now);
+    osc.start(now);
+    osc.stop(now + 7.6);
+    vibrato.stop(now + 7.6);
+  }
+
+  public stop() {
+    this.isPlaying = false;
+    if (this.timerId) clearTimeout(this.timerId);
+    if (this.ctx) {
+      try {
+        this.ctx.close();
+      } catch (e) {
+        console.error(e);
+      }
+      this.ctx = null;
+    }
+  }
+
+  public toggleMute(muted: boolean) {
+    if (this.masterGain && this.ctx) {
+      this.masterGain.gain.setValueAtTime(muted ? 0 : 0.35, this.ctx.currentTime);
+    }
+  }
+}
+
+// Global synth instance
+const audioSynth = new ApologySynth();
+
+export default function App() {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isAccepted, setIsAccepted] = useState(false);
+  const [showHeartsRain, setShowHeartsRain] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const mousePos = useRef({ x: 0, y: 0 });
+
+  // Handle music state
+  const handleMusicToggle = () => {
+    if (!isPlaying) {
+      audioSynth.start();
+      setIsPlaying(true);
+    } else {
+      audioSynth.stop();
+      setIsPlaying(false);
+    }
+  };
+
+  // Scroll function
+  const scrollToId = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
+  // Trigger Accept Ceremony
+  const handleAcceptApology = () => {
+    setIsAccepted(true);
+    setShowHeartsRain(true);
+    // Spawns mass heart rain triggers in canvas
+    setTimeout(() => {
+      setShowHeartsRain(false);
+    }, 6000);
+  };
+
+  // Canvas particle effects
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let animationFrameId: number;
+    let particles: Array<any> = [];
+
+    const resizeCanvas = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
+
+    resizeCanvas();
+    window.addEventListener("resize", resizeCanvas);
+
+    // Particle classes
+    class Sparkle {
+      x: number;
+      y: number;
+      vx: number;
+      vy: number;
+      size: number;
+      color: string;
+      alpha: number;
+      decay: number;
+
+      constructor(x: number, y: number, isExplosion = false) {
+        this.x = x;
+        this.y = y;
+        const angle = Math.random() * Math.PI * 2;
+        const speed = isExplosion ? Math.random() * 5 + 2 : Math.random() * 1.5 + 0.5;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed - (isExplosion ? 1 : 0.5); // drift up
+        this.size = Math.random() * 3 + 1.5;
+        this.color = `hsl(${40 + Math.random() * 15}, 100%, ${65 + Math.random() * 20}%)`; // luxury gold colors
+        this.alpha = 1;
+        this.decay = Math.random() * 0.015 + 0.01;
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.alpha -= this.decay;
+      }
+
+      draw(c: CanvasRenderingContext2D) {
+        c.save();
+        c.globalAlpha = this.alpha;
+        c.shadowBlur = 8;
+        c.shadowColor = this.color;
+        c.fillStyle = this.color;
+        c.beginPath();
+        c.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        c.fill();
+        c.restore();
+      }
+    }
+
+    class FloatingHeart {
+      x: number;
+      y: number;
+      size: number;
+      vy: number;
+      vx: number;
+      alpha: number;
+      scale: number;
+      growth: number;
+      color: string;
+      isExplosion: boolean;
+
+      constructor(x: number, y: number, isExplosion = false, direction = -1) {
+        this.x = x;
+        this.y = y;
+        this.isExplosion = isExplosion;
+        this.size = Math.random() * 12 + 8;
+        if (isExplosion) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = Math.random() * 6 + 3;
+          this.vx = Math.cos(angle) * speed;
+          this.vy = Math.sin(angle) * speed;
+          this.alpha = 1;
+        } else {
+          this.vx = (Math.random() - 0.5) * 0.8;
+          this.vy = (Math.random() * 1 + 0.8) * direction; // can fall or rise
+          this.alpha = Math.random() * 0.5 + 0.4;
+        }
+        this.scale = 1;
+        this.growth = Math.random() * 0.02 - 0.01;
+        this.color = `rgba(${255}, ${Math.floor(Math.random() * 50 + 40)}, ${Math.floor(Math.random() * 80 + 90)}, `;
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        if (this.isExplosion) {
+          this.vy += 0.05; // gravity for explosion
+          this.alpha -= 0.018;
+        } else {
+          this.alpha -= 0.0015;
+        }
+        this.scale += this.growth;
+      }
+
+      draw(c: CanvasRenderingContext2D) {
+        if (this.alpha <= 0) return;
+        c.save();
+        c.globalAlpha = this.alpha;
+        c.fillStyle = this.isExplosion ? "#FF4D6D" : "rgba(255, 77, 109, 0.7)";
+        c.shadowBlur = this.isExplosion ? 12 : 4;
+        c.shadowColor = "#FF4D6D";
+        
+        c.translate(this.x, this.y);
+        c.scale(this.scale * 0.7, this.scale * 0.7);
+        c.beginPath();
+        // Standard heart shape curve
+        c.moveTo(0, 0);
+        c.bezierCurveTo(-this.size / 2, -this.size / 2, -this.size, this.size / 3, 0, this.size);
+        c.bezierCurveTo(this.size, this.size / 3, this.size / 2, -this.size / 2, 0, 0);
+        c.closePath();
+        c.fill();
+        c.restore();
+      }
+    }
+
+    class GoldenButterfly {
+      x: number;
+      y: number;
+      vx: number;
+      vy: number;
+      angle: number;
+      flapSpeed: number;
+      size: number;
+      color: string;
+      alpha: number;
+
+      constructor() {
+        this.x = Math.random() * window.innerWidth;
+        this.y = Math.random() * window.innerHeight;
+        this.vx = (Math.random() - 0.5) * 1.5;
+        this.vy = (Math.random() - 0.6) * 1.2;
+        this.angle = Math.random() * Math.PI * 2;
+        this.flapSpeed = 0.08 + Math.random() * 0.05;
+        this.size = Math.random() * 10 + 10;
+        this.color = "#FFD700";
+        this.alpha = Math.random() * 0.6 + 0.4;
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.angle += this.flapSpeed;
+
+        // Periodic direction change
+        if (Math.random() < 0.02) {
+          this.vx = (Math.random() - 0.5) * 1.5;
+          this.vy = (Math.random() - 0.6) * 1.2;
+        }
+
+        // Keep inside bounds gracefully
+        if (this.x < -20) this.x = window.innerWidth + 20;
+        if (this.x > window.innerWidth + 20) this.x = -20;
+        if (this.y < -20) this.y = window.innerHeight + 20;
+        if (this.y > window.innerHeight + 20) this.y = -20;
+      }
+
+      draw(c: CanvasRenderingContext2D) {
+        c.save();
+        c.globalAlpha = this.alpha;
+        c.shadowBlur = 10;
+        c.shadowColor = this.color;
+        c.fillStyle = this.color;
+        c.translate(this.x, this.y);
+
+        // Draw animated butterfly wings
+        const flap = Math.abs(Math.sin(this.angle));
+        c.beginPath();
+        // Left Wing
+        c.ellipse(-this.size/2 * flap, -this.size/4, this.size/2 * flap, this.size/2, -Math.PI/6, 0, Math.PI*2);
+        // Right Wing
+        c.ellipse(this.size/2 * flap, -this.size/4, this.size/2 * flap, this.size/2, Math.PI/6, 0, Math.PI*2);
+        c.fill();
+
+        // Little antenna
+        c.strokeStyle = "rgba(255,215,0,0.8)";
+        c.lineWidth = 1;
+        c.beginPath();
+        c.moveTo(0, -this.size/2);
+        c.quadraticCurveTo(-3, -this.size - 2, -6, -this.size);
+        c.moveTo(0, -this.size/2);
+        c.quadraticCurveTo(3, -this.size - 2, 6, -this.size);
+        c.stroke();
+
+        c.restore();
+      }
+    }
+
+    class FloatingEmoji {
+      x: number;
+      y: number;
+      emoji: string;
+      vy: number;
+      vx: number;
+      alpha: number;
+      size: number;
+
+      constructor(x: number, emoji: string) {
+        this.x = x;
+        this.y = window.innerHeight + Math.random() * 200;
+        this.emoji = emoji;
+        this.vy = -(Math.random() * 0.6 + 0.3);
+        this.vx = (Math.random() - 0.5) * 0.4;
+        this.alpha = Math.random() * 0.5 + 0.3;
+        this.size = Math.random() * 16 + 24;
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        if (this.y < -50) {
+          this.y = window.innerHeight + 50;
+          this.alpha = Math.random() * 0.5 + 0.3;
+        }
+      }
+
+      draw(c: CanvasRenderingContext2D) {
+        c.save();
+        c.globalAlpha = this.alpha;
+        c.font = `${this.size}px sans-serif`;
+        c.fillText(this.emoji, this.x, this.y);
+        c.restore();
+      }
+    }
+
+    // Initialize decorative side emojis
+    const cuteEmojis = ["🥺", "🥹", "😔", "🙏", "💔", "❤️"];
+    cuteEmojis.forEach((emoji, i) => {
+      // Place some on the left, some on the right
+      const isLeft = i % 2 === 0;
+      const x = isLeft 
+        ? Math.random() * 120 + 30 
+        : window.innerWidth - (Math.random() * 120 + 150);
+      particles.push(new FloatingEmoji(x, emoji));
+    });
+
+    // Spawn 5 butterflies
+    for (let i = 0; i < 5; i++) {
+      particles.push(new GoldenButterfly());
+    }
+
+    // Trigger cursor sparkles track
+    const handleMouseMove = (e: MouseEvent) => {
+      mousePos.current = { x: e.clientX, y: e.clientY };
+      if (Math.random() < 0.4) {
+        particles.push(new Sparkle(e.clientX, e.clientY));
+      }
+    };
+
+    // Click explosion handler
+    const handleMouseClick = (e: MouseEvent) => {
+      // Spawns heart & sparkle explosions
+      for (let i = 0; i < 15; i++) {
+        particles.push(new FloatingHeart(e.clientX, e.clientY, true));
+        particles.push(new Sparkle(e.clientX, e.clientY, true));
+      }
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("click", handleMouseClick);
+
+    // Continuous Loop
+    const render = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Continuous slow rise of romantic floating gold particles and hearts
+      if (Math.random() < 0.05) {
+        // Gold sparkles from bottom
+        particles.push(new Sparkle(Math.random() * window.innerWidth, window.innerHeight - 10));
+      }
+      if (Math.random() < 0.04) {
+        // Red hearts from bottom
+        particles.push(new FloatingHeart(Math.random() * window.innerWidth, window.innerHeight + 10));
+      }
+
+      // If Heart rain ceremony is active, drop hearts and gold confetti from top
+      if (showHeartsRain || isAccepted) {
+        if (Math.random() < 0.3) {
+          // Rain falling hearts from top
+          particles.push(new FloatingHeart(Math.random() * window.innerWidth, -20, false, 1.5));
+        }
+        if (Math.random() < 0.4) {
+          // Sparkle rain
+          particles.push(new Sparkle(Math.random() * window.innerWidth, -10, true));
+        }
+      }
+
+      // Update and Draw particles
+      particles = particles.filter((p) => {
+        p.update();
+        p.draw(ctx);
+        // Clean up out of bounds particles or fully transparent ones
+        if (p.alpha <= 0.005) return false;
+        if (p.y < -150 && !(p instanceof FloatingEmoji)) return false;
+        return true;
+      });
+
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    render();
+
+    return () => {
+      window.removeEventListener("resize", resizeCanvas);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("click", handleMouseClick);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [showHeartsRain, isAccepted]);
+
+  return (
+    <div className="relative min-h-screen bg-gradient-to-br from-luxury-black to-luxury-grey-dark text-white font-sans overflow-x-hidden selection:bg-gold/30 selection:text-gold">
+      
+      {/* Dynamic Background Interactivity Layer */}
+      <canvas
+        ref={canvasRef}
+        id="canvas-particles"
+        className="fixed inset-0 pointer-events-none z-20"
+      />
+
+      {/* Spotlights and Ambient Golden Glowing Lights in Background */}
+      <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] bg-gold/10 bg-glow-orb" />
+      <div className="absolute top-2/3 right-1/4 w-[500px] h-[500px] bg-soft-red/10 bg-glow-orb" />
+      <div className="absolute top-10 right-10 w-[200px] h-[200px] bg-gold/5 bg-glow-orb" />
+
+      {/* Golden Hanging Fairy Lights suspended across the top */}
+      <div className="absolute top-0 left-0 right-0 h-16 flex justify-between px-2 pointer-events-none z-30 overflow-hidden opacity-90">
+        {Array.from({ length: 30 }).map((_, i) => (
+          <div key={i} className="flex flex-col items-center flex-1 animate-sway" style={{ animationDelay: `${i * 0.15}s` }}>
+            <div className="w-[1px] h-8 bg-gold/40"></div>
+            <div 
+              className="w-2.5 h-2.5 rounded-full bg-gold animate-twinkle shadow-lg"
+              style={{ 
+                animationDelay: `${i * 0.2}s`, 
+                animationDuration: `${1.5 + Math.random() * 2}s` 
+              }}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Sticky Premium Floating Music Controller bar */}
+      <div className="fixed top-6 right-6 z-50">
+        <motion.button
+          id="music-toggle-btn"
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={handleMusicToggle}
+          className="flex items-center gap-2.5 px-4 py-2.5 bg-black/60 border border-gold/30 rounded-full backdrop-blur-md text-gold text-xs font-medium tracking-wider glow-gold-strong transition-all cursor-pointer"
+        >
+          {isPlaying ? (
+            <>
+              <Volume2 className="w-4 h-4 animate-pulse-gentle" />
+              <span>PAUSE EMOTION</span>
+            </>
+          ) : (
+            <>
+              <VolumeX className="w-4 h-4 text-rose-gold" />
+              <span>🎵 PLAY BACKGROUND MUSIC</span>
+            </>
+          )}
+        </motion.button>
+      </div>
+
+      {/* Floating Emojis Prompt Sidebar - desktop only */}
+      <div className="hidden lg:flex flex-col gap-6 fixed left-6 top-1/3 z-40 text-glow-gold pointer-events-none text-2xl">
+        <span className="animate-float-slow" style={{ animationDelay: "0.2s" }}>🥺</span>
+        <span className="animate-float-slow" style={{ animationDelay: "1.4s" }}>🥹</span>
+        <span className="animate-float-slow" style={{ animationDelay: "2.6s" }}>😔</span>
+        <span className="animate-float-slow" style={{ animationDelay: "3.8s" }}>🙏</span>
+      </div>
+      <div className="hidden lg:flex flex-col gap-6 fixed right-6 top-1/3 z-40 text-glow-gold pointer-events-none text-2xl">
+        <span className="animate-float-slow" style={{ animationDelay: "0.8s" }}>💔</span>
+        <span className="animate-float-slow" style={{ animationDelay: "2.0s" }}>❤️</span>
+        <span className="animate-float-slow" style={{ animationDelay: "3.2s" }}>🥺</span>
+        <span className="animate-float-slow" style={{ animationDelay: "4.4s" }}>🙏</span>
+      </div>
+
+      {/* Decorative Golden Corner Flourishes */}
+      <div className="absolute top-4 left-4 w-12 h-12 border-t-2 border-l-2 border-gold/40 pointer-events-none z-30" />
+      <div className="absolute top-4 right-4 w-12 h-12 border-t-2 border-r-2 border-gold/40 pointer-events-none z-30" />
+      <div className="absolute bottom-4 left-4 w-12 h-12 border-b-2 border-l-2 border-gold/40 pointer-events-none z-30" />
+      <div className="absolute bottom-4 right-4 w-12 h-12 border-b-2 border-r-2 border-gold/40 pointer-events-none z-30" />
+
+      {/* MAIN CONTAINER */}
+      <div className="relative z-30 flex flex-col items-center">
+        
+        {/* ================= HERO SECTION ================= */}
+        <section className="relative min-h-screen w-full flex flex-col justify-center items-center px-4 pt-16 pb-12 overflow-hidden border-b border-gold/15">
+          <div className="text-center max-w-4xl mx-auto flex flex-col items-center">
+            
+            {/* Custom Glowing Greeting */}
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 1.2 }}
+              className="mb-2"
+            >
+              <span className="text-xs uppercase tracking-[0.4em] text-rose-gold font-semibold text-glow-gold">
+                A Sincere Request
+              </span>
+            </motion.div>
+
+            {/* Title display */}
+            <motion.h1
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 1.5, ease: "easeOut" }}
+              className="font-vibes text-7xl md:text-9xl text-gold tracking-wide mb-6 text-glow-gold select-none"
+            >
+              🤎 Sorry To Tom 🤎
+            </motion.h1>
+
+            {/* Hero Main Image Frame */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 1.5, delay: 0.2 }}
+              className="relative p-2.5 rounded-3xl bg-black/50 border-2 border-gold/30 glow-gold-strong max-w-sm md:max-w-md mx-auto mb-8 transition-transform hover:scale-[1.03] duration-500 overflow-hidden group"
+            >
+              <img
+                src={tomJerrySorry}
+                alt="Tom and Jerry Apology"
+                referrerPolicy="no-referrer"
+                className="w-full h-auto rounded-2xl object-cover aspect-[4/3] shadow-2xl filter brightness-95 group-hover:brightness-100 transition-all duration-500"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none flex items-end justify-center pb-4">
+                <span className="text-glow-gold text-gold font-serif text-sm italic tracking-widest">
+                  Forgiveness is the smell that flowers give when they are trampled
+                </span>
+              </div>
+            </motion.div>
+
+            {/* Alternating Animated Slogans */}
+            <div className="h-20 mb-10 flex flex-col justify-center">
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: [0, 1, 1, 0] }}
+                transition={{ repeat: Infinity, duration: 6, times: [0, 0.1, 0.45, 0.55] }}
+                className="font-serif italic text-2xl md:text-3xl text-glow-red text-soft-red tracking-wider absolute left-1/2 -translate-x-1/2"
+              >
+                &ldquo;I'm Your Jerry...&rdquo;
+              </motion.p>
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: [0, 0, 1, 1, 0] }}
+                transition={{ repeat: Infinity, duration: 6, times: [0, 0.5, 0.6, 0.95, 1] }}
+                className="font-serif italic text-2xl md:text-3xl text-glow-gold text-gold tracking-wider absolute left-1/2 -translate-x-1/2"
+              >
+                &ldquo;You Are My Tom...&rdquo;
+              </motion.p>
+            </div>
+
+            {/* Read My Apology Glowing Trigger */}
+            <motion.button
+              id="scroll-to-apology-btn"
+              whileHover={{ scale: 1.05, boxShadow: "0 0 35px rgba(255, 215, 0, 0.9)" }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => scrollToId("apology-section")}
+              className="flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-gold to-amber-500 hover:from-amber-400 hover:to-gold border-none rounded-full text-black font-bold tracking-widest shadow-xl text-sm transition-all cursor-pointer glow-gold-strong"
+            >
+              <span>🥺 Read My Apology</span>
+              <ArrowRight className="w-4 h-4 text-black animate-pulse-gentle" />
+            </motion.button>
+
+          </div>
+        </section>
+
+
+        {/* ================= APOLOGY LETTER SECTION ================= */}
+        <section
+          id="apology-section"
+          className="relative w-full max-w-3xl mx-auto px-4 py-28 flex flex-col items-center text-center"
+        >
+          {/* Glass Card Container for the letter */}
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-100px" }}
+            variants={{
+              hidden: { opacity: 0, y: 50 },
+              visible: {
+                opacity: 1,
+                y: 0,
+                transition: { staggerChildren: 0.1, duration: 1.2 }
+              }
+            }}
+            className="w-full glass-card p-8 md:p-14 rounded-3xl border border-gold/25 shadow-2xl glow-gold relative"
+          >
+            {/* Soft decorative flower ornaments on letter corner */}
+            <div className="absolute top-6 left-6 text-gold/30 text-xs tracking-widest pointer-events-none font-mono">
+              ★ FORGIVE ★
+            </div>
+            <div className="absolute bottom-6 right-6 text-gold/30 text-xs tracking-widest pointer-events-none font-mono">
+              ★ JERRY ★
+            </div>
+
+            <motion.span
+              variants={{ hidden: { opacity: 0 }, visible: { opacity: 1 } }}
+              className="text-5xl block mb-6 animate-pulse-gentle"
+            >
+              🥺
+            </motion.span>
+
+            <motion.h2
+              variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
+              className="font-serif text-3xl md:text-4xl text-gold mb-12 tracking-wide text-glow-gold"
+            >
+              Dear Tom,
+            </motion.h2>
+
+            {/* Letter Body lines */}
+            <div className="space-y-6 text-gray-200 font-sans leading-relaxed text-base md:text-lg">
+              {[
+                "I know my words,",
+                "my actions,",
+                "or my behaviour hurt you.",
+                "For that..."
+              ].map((line, idx) => (
+                <motion.p
+                  key={idx}
+                  variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}
+                  className="tracking-wide"
+                >
+                  {line}
+                </motion.p>
+              ))}
+
+              <motion.p
+                variants={{ hidden: { opacity: 0, scale: 0.95 }, visible: { opacity: 1, scale: 1 } }}
+                className="font-serif italic text-2xl md:text-3xl text-soft-red font-medium py-3 text-glow-red"
+              >
+                I am truly sorry.
+              </motion.p>
+
+              {[
+                "I never wanted to make you feel bad.",
+                "If anything I said,",
+                "or anything I did,",
+                "made your heart heavy..."
+              ].map((line, idx) => (
+                <motion.p
+                  key={idx}
+                  variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}
+                  className="tracking-wide"
+                >
+                  {line}
+                </motion.p>
+              ))}
+
+              <motion.p
+                variants={{ hidden: { opacity: 0, scale: 0.95 }, visible: { opacity: 1, scale: 1 } }}
+                className="font-serif italic text-2xl md:text-3xl text-gold py-2 text-glow-gold"
+              >
+                Please forgive me.
+              </motion.p>
+
+              {[
+                "Sometimes I fight with you.",
+                "Sometimes I annoy you.",
+                "Sometimes I irritate you.",
+                "Sometimes I become stubborn.",
+                "But..."
+              ].map((line, idx) => (
+                <motion.p
+                  key={idx}
+                  variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}
+                  className="tracking-wide text-rose-gold/95"
+                >
+                  {line}
+                </motion.p>
+              ))}
+
+              <motion.p
+                variants={{ hidden: { opacity: 0, scale: 1.1 }, visible: { opacity: 1, scale: 1 } }}
+                className="font-serif text-2xl md:text-3xl text-soft-red font-semibold py-4 text-glow-red animate-pulse-gentle"
+              >
+                I never want to lose you.
+              </motion.p>
+
+              {[
+                "I hope one day",
+                "you can smile again",
+                "without remembering the hurt I caused.",
+                "I don't expect everything to become perfect immediately.",
+                "I just hope..."
+              ].map((line, idx) => (
+                <motion.p
+                  key={idx}
+                  variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}
+                  className="tracking-wide"
+                >
+                  {line}
+                </motion.p>
+              ))}
+
+              <motion.p
+                variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
+                className="font-serif text-xl md:text-2xl text-gold italic py-2 text-glow-gold"
+              >
+                You accept my apology from your heart.
+              </motion.p>
+
+              <motion.span
+                variants={{ hidden: { opacity: 0 }, visible: { opacity: 1 } }}
+                className="text-4xl block py-4"
+              >
+                🤎
+              </motion.span>
+
+              <motion.p
+                variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
+                className="text-xs tracking-[0.3em] text-rose-gold uppercase"
+              >
+                Once Again...
+              </motion.p>
+
+              <motion.h3
+                variants={{ hidden: { opacity: 0, scale: 0.95 }, visible: { opacity: 1, scale: 1 } }}
+                className="font-vibes text-5xl md:text-6xl text-gold text-glow-gold pt-2"
+              >
+                I'm Really Sorry.
+              </motion.h3>
+            </div>
+          </motion.div>
+        </section>
+
+
+        {/* ================= SPECIAL SECTION ================= */}
+        <section className="relative w-full max-w-5xl mx-auto px-4 py-20 flex flex-col items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            
+            {/* Special Text Left Frame */}
+            <motion.div
+              initial={{ opacity: 0, x: -40 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 1.2 }}
+              className="lg:col-span-7 space-y-8 text-center lg:text-left"
+            >
+              <span className="text-glow-gold text-gold tracking-[0.25em] text-xs font-semibold uppercase block">
+                Our Beautiful Relationship
+              </span>
+              
+              <h2 className="font-serif text-4xl md:text-5xl text-white tracking-wide leading-tight">
+                Like Tom Stays With <span className="text-gold text-glow-gold">Jerry</span>
+              </h2>
+
+              <div className="space-y-4 text-lg text-rose-gold/90 leading-relaxed font-sans">
+                <p className="border-l-2 lg:border-l-4 border-gold/40 pl-0 lg:pl-6 italic">
+                  "I Fight With You."
+                </p>
+                <p className="border-l-2 lg:border-l-4 border-gold/40 pl-0 lg:pl-6 italic">
+                  "I Annoy You."
+                </p>
+                <p className="border-l-2 lg:border-l-4 border-gold/40 pl-0 lg:pl-6 italic">
+                  "I Irritate You."
+                </p>
+                <p className="text-white font-semibold pt-4 text-xl">
+                  But...
+                </p>
+                <p className="text-soft-red text-glow-red font-serif text-2xl font-medium animate-pulse-gentle">
+                  You Have To Stay With Me...
+                </p>
+                <p className="italic text-gray-200">
+                  Like Tom Stays With Jerry.
+                </p>
+              </div>
+
+              <div className="text-3xl pt-2">🤎</div>
+
+              <p className="font-vibes text-5xl text-gold text-glow-gold">
+                I'm Your Jerry.
+              </p>
+            </motion.div>
+
+            {/* Special Image Right Frame */}
+            <motion.div
+              initial={{ opacity: 0, x: 40 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 1.2 }}
+              className="lg:col-span-5 relative p-2 bg-black/40 border border-gold/20 rounded-3xl shadow-xl hover:shadow-2xl transition-all"
+            >
+              <img
+                src={tomJerryHug}
+                alt="Tom & Jerry Reconciliation"
+                referrerPolicy="no-referrer"
+                className="w-full h-auto rounded-2xl aspect-[4/3] object-cover glow-gold"
+              />
+              <div className="absolute -bottom-4 -left-4 w-12 h-12 border-b-2 border-l-2 border-gold/50 pointer-events-none" />
+              <div className="absolute -top-4 -right-4 w-12 h-12 border-t-2 border-r-2 border-gold/50 pointer-events-none" />
+            </motion.div>
+
+          </div>
+        </section>
+
+
+        {/* ================= MEMORIES SECTION ================= */}
+        <section className="relative w-full max-w-6xl mx-auto px-4 py-24 flex flex-col items-center">
+          
+          <div className="text-center mb-16">
+            <span className="text-xs uppercase tracking-[0.4em] text-rose-gold font-semibold text-glow-gold">
+              Cherished Moments
+            </span>
+            <h2 className="font-serif text-4xl md:text-5xl text-gold text-glow-gold tracking-wide mt-3">
+              Memories Section
+            </h2>
+            <p className="text-gray-400 mt-4 max-w-xl mx-auto text-sm font-sans">
+              Our sweet journeys, little laughs, and beautiful memories that define us. Designed with glass cards and glowing borders.
+            </p>
+          </div>
+
+          {/* Symmetrical Glass Cards Bento/Gallery */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 w-full">
+            
+            {/* Memory 1 */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.1 }}
+              className="glass-card rounded-2xl overflow-hidden p-3 border border-gold/15 transition-all duration-500 hover:scale-[1.03] hover:border-gold/60 hover:shadow-2xl group cursor-pointer flex flex-col h-full"
+            >
+              <div className="overflow-hidden rounded-xl relative aspect-[4/3]">
+                <img
+                  src={tomJerrySweet}
+                  alt="Sweet peace memory"
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 filter brightness-90 group-hover:brightness-100"
+                />
+              </div>
+              <div className="p-4 flex-grow flex flex-col justify-between">
+                <div>
+                  <h3 className="font-serif text-lg text-gold text-glow-gold font-medium mb-1">
+                    Sweet Peace
+                  </h3>
+                  <p className="text-gray-400 text-xs leading-relaxed font-sans">
+                    Sleeping peacefully side-by-side, forgetting any little dynamic of distance or fights.
+                  </p>
+                </div>
+                <span className="text-xs text-rose-gold italic mt-4 block">#QuietMoments</span>
+              </div>
+            </motion.div>
+
+            {/* Memory 2 */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="glass-card rounded-2xl overflow-hidden p-3 border border-gold/15 transition-all duration-500 hover:scale-[1.03] hover:border-gold/60 hover:shadow-2xl group cursor-pointer flex flex-col h-full"
+            >
+              <div className="overflow-hidden rounded-xl relative aspect-[4/3]">
+                <img
+                  src={tomJerryHug}
+                  alt="Reconciliation Hug"
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 filter brightness-90 group-hover:brightness-100"
+                />
+              </div>
+              <div className="p-4 flex-grow flex flex-col justify-between">
+                <div>
+                  <h3 className="font-serif text-lg text-gold text-glow-gold font-medium mb-1">
+                    Our Warm Hugs
+                  </h3>
+                  <p className="text-gray-400 text-xs leading-relaxed font-sans">
+                    The cozy reassurance that no matter how much we clash, we belong right next to each other.
+                  </p>
+                </div>
+                <span className="text-xs text-rose-gold italic mt-4 block">#Reunited</span>
+              </div>
+            </motion.div>
+
+            {/* Memory 3 */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              className="glass-card rounded-2xl overflow-hidden p-3 border border-gold/15 transition-all duration-500 hover:scale-[1.03] hover:border-gold/60 hover:shadow-2xl group cursor-pointer flex flex-col h-full"
+            >
+              <div className="overflow-hidden rounded-xl relative aspect-[4/3]">
+                <img
+                  src={tomJerrySorry}
+                  alt="Apology illustration"
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 filter brightness-90 group-hover:brightness-100"
+                />
+              </div>
+              <div className="p-4 flex-grow flex flex-col justify-between">
+                <div>
+                  <h3 className="font-serif text-lg text-gold text-glow-gold font-medium mb-1">
+                    Heartfelt Sorry
+                  </h3>
+                  <p className="text-gray-400 text-xs leading-relaxed font-sans">
+                    Jerry holding a soft heart, offering an emotional look of remorse to bring back the smile.
+                  </p>
+                </div>
+                <span className="text-xs text-rose-gold italic mt-4 block">#Forgiveness</span>
+              </div>
+            </motion.div>
+
+            {/* Memory 4 */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+              className="glass-card rounded-2xl overflow-hidden p-3 border border-gold/15 transition-all duration-500 hover:scale-[1.03] hover:border-gold/60 hover:shadow-2xl group cursor-pointer flex flex-col h-full"
+            >
+              <div className="overflow-hidden rounded-xl relative aspect-[4/3]">
+                <img
+                  src={tomJerryForever}
+                  alt="Inseparable friends"
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 filter brightness-90 group-hover:brightness-100"
+                />
+              </div>
+              <div className="p-4 flex-grow flex flex-col justify-between">
+                <div>
+                  <h3 className="font-serif text-lg text-gold text-glow-gold font-medium mb-1">
+                    Inseparable Bond
+                  </h3>
+                  <p className="text-gray-400 text-xs leading-relaxed font-sans">
+                    Leaning on each other, looking forward to countless tomorrows filled with warmth.
+                  </p>
+                </div>
+                <span className="text-xs text-rose-gold italic mt-4 block">#ForeverTogether</span>
+              </div>
+            </motion.div>
+
+          </div>
+        </section>
+
+
+        {/* ================= FORGIVENESS SECTION ================= */}
+        <section className="relative w-full max-w-4xl mx-auto px-4 py-24 flex flex-col items-center text-center">
+          
+          {/* Glass layout wrapper for forgiveness */}
+          <div className="w-full glass-card p-10 md:p-16 rounded-3xl border border-gold/30 relative overflow-hidden flex flex-col items-center">
+            
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gold/5 bg-glow-orb pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-32 h-32 bg-soft-red/5 bg-glow-orb pointer-events-none" />
+
+            {/* Huge Glowing Pulse Heart */}
+            <motion.div
+              animate={{ 
+                scale: isAccepted ? [1, 1.25, 1.15, 1.25, 1.1] : [1, 1.08, 1],
+                filter: isAccepted 
+                  ? ["drop-shadow(0 0 10px #FF4D6D)", "drop-shadow(0 0 40px #FF4D6D)", "drop-shadow(0 0 20px #FF4D6D)"]
+                  : ["drop-shadow(0 0 8px rgba(255,215,0,0.4))", "drop-shadow(0 0 20px rgba(255,77,109,0.7))", "drop-shadow(0 0 8px rgba(255,215,0,0.4))"]
+              }}
+              transition={{ 
+                repeat: Infinity, 
+                duration: isAccepted ? 1.5 : 2.5,
+                ease: "easeInOut" 
+              }}
+              className="mb-8 cursor-pointer text-soft-red block"
+            >
+              <Heart className={`w-28 h-28 ${isAccepted ? "fill-soft-red text-soft-red" : "text-soft-red fill-soft-red/30"} filter drop-shadow-xl`} />
+            </motion.div>
+
+            <span className="text-xs uppercase tracking-[0.4em] text-gold font-semibold mb-3">
+              The Ultimate Question
+            </span>
+
+            <h2 className="font-serif text-4xl md:text-5xl text-white tracking-wide mb-6">
+              Can You Forgive Me?
+            </h2>
+
+            <span className="text-4xl block mb-10 tracking-widest text-glow-gold">🥺🙏</span>
+
+            {/* Forgiveness Buttons */}
+            <div className="flex flex-col sm:flex-row items-center gap-6 justify-center w-full max-w-md">
+              <AnimatePresence mode="wait">
+                {!isAccepted ? (
+                  <motion.button
+                    id="accept-apology-btn"
+                    key="accept-btn"
+                    whileHover={{ scale: 1.06, boxShadow: "0 0 35px #FF4D6D" }}
+                    whileTap={{ scale: 0.96 }}
+                    onClick={handleAcceptApology}
+                    className="w-full sm:w-auto px-10 py-4.5 bg-gradient-to-r from-soft-red via-gold to-soft-red bg-[length:200%_auto] hover:bg-right transition-all duration-500 border border-white/20 rounded-full text-white font-semibold tracking-wider text-sm shadow-xl cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <span>🤎 Accept My Apology</span>
+                    <Sparkles className="w-4 h-4 text-white animate-spin" style={{ animationDuration: '4s' }} />
+                  </motion.button>
+                ) : (
+                  <motion.div
+                    key="accepted-alert"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    className="w-full p-4.5 bg-gold/15 border-2 border-gold rounded-full flex items-center justify-center gap-3 text-gold text-glow-gold font-serif font-semibold tracking-widest text-base glow-gold"
+                  >
+                    <Check className="w-5 h-5 text-gold animate-bounce" />
+                    <span>APOLOGY ACCEPTED FOREVER! 🐭🤎🐱</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Success Reconciliation Box */}
+            <AnimatePresence>
+              {isAccepted && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.8, delay: 0.3 }}
+                  className="mt-8 p-6 bg-black/60 border border-gold/30 rounded-2xl max-w-lg shadow-xl"
+                >
+                  <p className="text-sm text-gray-300 font-sans leading-relaxed">
+                    ✨ Thank you, Tom! You have made my heart incredibly light. Jerry promises to stay sweet, make fewer troubles, and stand by your side forever and ever. ❤️
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+          </div>
+        </section>
+
+
+        {/* ================= FINAL MESSAGE ================= */}
+        <section className="relative w-full max-w-3xl mx-auto px-4 py-16 text-center flex flex-col items-center">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 1 }}
+            className="space-y-6"
+          >
+            <span className="text-4xl animate-bounce block">🥺</span>
+            
+            <div className="space-y-3 font-serif italic text-lg md:text-xl text-gray-300">
+              <p>&ldquo;Every &quot;Sorry&quot; comes from the heart.&rdquo;</p>
+              <p>&ldquo;I know I hurt you.&rdquo;</p>
+              <p>&ldquo;I know I made mistakes.&rdquo;</p>
+              <p>&ldquo;But today...&rdquo;</p>
+              <p>&ldquo;I'm only here to say...&rdquo;</p>
+            </div>
+
+            <span className="text-3xl block pt-2">🤎</span>
+
+            <h3 className="font-serif text-3xl md:text-4xl text-gold font-bold text-glow-gold">
+              I'm Truly Sorry, Tom.
+            </h3>
+            
+            <p className="font-serif text-2xl text-soft-red text-glow-red italic font-medium">
+              Please Accept My Apology.
+            </p>
+
+            <p className="font-vibes text-5xl text-gold text-glow-gold pt-4">
+              From Your Jerry 🐭🤎
+            </p>
+          </motion.div>
+        </section>
+
+
+        {/* ================= FOOTER ================= */}
+        <footer className="relative w-full border-t border-gold/15 bg-black/80 py-16 flex flex-col items-center text-center px-4">
+          
+          <div className="max-w-md mx-auto space-y-8">
+            
+            {/* Footer Circular Image Card */}
+            <motion.div
+              whileHover={{ rotate: 3, scale: 1.05 }}
+              className="w-36 h-36 rounded-full overflow-hidden border-2 border-gold/30 glow-gold mx-auto p-1 bg-black/50 transition-all duration-500"
+            >
+              <img
+                src={tomJerryForever}
+                alt="Tom & Jerry Friendship"
+                referrerPolicy="no-referrer"
+                className="w-full h-full object-cover rounded-full"
+              />
+            </motion.div>
+
+            <div className="space-y-4">
+              <p className="font-serif italic text-xl text-gold text-glow-gold tracking-wider">
+                &ldquo;I'm Your Jerry Forever.&rdquo;
+              </p>
+              <div className="text-2xl">🤎</div>
+            </div>
+
+            {/* Quick Navigation and Back-to-Top triggers */}
+            <div className="flex justify-center gap-6 text-xs text-rose-gold/60 font-mono tracking-widest pt-4">
+              <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} className="hover:text-gold transition-colors cursor-pointer">
+                BACK TO TOP
+              </button>
+              <span>•</span>
+              <button onClick={() => scrollToId("apology-section")} className="hover:text-gold transition-colors cursor-pointer">
+                APOLOGY LETTER
+              </button>
+            </div>
+
+            <div className="text-[10px] text-gray-600 font-mono tracking-widest pt-8 uppercase">
+              Designed with love and deep regrets • Crafted in luxury black & gold • 2026
+            </div>
+
+          </div>
+        </footer>
+
+      </div>
+    </div>
+  );
+}
