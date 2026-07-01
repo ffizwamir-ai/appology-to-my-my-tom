@@ -1,0 +1,6 @@
+{
+  "name": "A Letter From My Heart",
+  "description": "A premium, luxury, and emotional apology letter and interactive tribute dedicated to Tom, featuring floating rose petals, glowing sparkles, interactive elements, and ambient background music.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
